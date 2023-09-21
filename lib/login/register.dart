@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:untitled2/login/login.dart';
 
 import '../principale/accueil.dart';
+import '../principale/otp_confirmation.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});
@@ -34,25 +36,74 @@ class _RegisterState extends State<Register> {
     );
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
+  String _errorMessage = '';
 
-  Future<void> registerUser() async {
+  Future<void> send_otp() async{
+    setState(() {
+      _errorMessage = '';
+    });
+
+    String emails = email.text;
+    String password = mdp.text;
+
     final response = await http.post(
-      Uri.parse('http://10.0.2.2:8000/api/register'),
+      Uri.parse('http://karlmichel.alwaysdata.net/api.php'),
       body: {
-        'nom': nom.text,
-        'prenom': prenom.text,
-        'email': email.text,
-        'tel': tel.text,
-        'password': mdp.text,
+        'click': 'code_verification',
+        'email': emails
       },
     );
+    print(response.body);
+    if (response.statusCode == 200) {
+      Map<String, dynamic> responseData = json.decode(response.body);
 
-    if (response.statusCode == 201) {
-      // L'inscription a réussi, vous pouvez afficher un message à l'utilisateur
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context)=>Login()), (route) => false);
-      print('c\'est top');
+      if (responseData['success']) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => OTP(email: emails, pseudo: nom.text, telephone: tel.text, password: password, code: responseData['code'], prenom: prenom.text,)),
+        );
+      } else {
+        // Gérer les erreurs d'inscription
+        setState(() {
+          _errorMessage = responseData['message'];
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: Text('Erreur de\'inscription'),
+                content: Text(_errorMessage),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: Text('Fermer'),
+                  ),
+                ],
+              );
+            },
+          );
+        });
+      }
     } else {
-      throw Exception('Échec de l\'inscription');
+      // Gérer les erreurs de connexion au serveur
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Erreur d\'inscription'),
+            content: Text('Probleme de connexion au serveur'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: Text('Fermer'),
+              ),
+            ],
+          );
+        },
+      );
     }
   }
 
@@ -256,7 +307,7 @@ class _RegisterState extends State<Register> {
                           ?GestureDetector(
                         onTap: (){
                           //Navigator.push(context, MaterialPageRoute(builder: (context)=>Acceuil()));
-                          registerUser();
+                          send_otp();
                         },
                         child: Container(
                           width: size.width/1.2,
@@ -315,3 +366,9 @@ class _RegisterState extends State<Register> {
     );
   }
 }
+
+const _chars = '1234567890';
+Random _rnd = Random();
+
+String getRandomString(int length) => String.fromCharCodes(Iterable.generate(
+    length, (_) => _chars.codeUnitAt(_rnd.nextInt(_chars.length))));
